@@ -6,6 +6,7 @@ interface HolidayModalProps {
   schedule: Schedule;
   onClose: () => void;
   onSave: (holidayData: { reason: string; startDate: string; endDate: string }) => void;
+  isOpen?: boolean;
 }
 
 const HolidayModal: React.FC<HolidayModalProps> = ({ schedule, onClose, onSave }) => {

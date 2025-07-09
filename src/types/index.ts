@@ -36,21 +36,19 @@ export interface Doctor {
 }
 
 export interface Schedule {
-  timeEnd: string;
-  timeStart: string;
-  status: string;
-  holidayReason: string;
-  holidayStartDate: string;
-  holidayEndDate: string;
   id: string;
   doctorId: string;
   doctorName: string;
   poly: string;
   days: string[];
-  day?: string;
   startTime: string;
   endTime: string;
+  status: string;
+  holidayReason?: string;
+  holidayStartDate?: string;
+  holidayEndDate?: string;
   createdAt: string;
+  lastUpdated?: string;
 }
 
 export interface FollowUpAppointment {
@@ -62,4 +60,6 @@ export interface FollowUpAppointment {
   appointmentTime: string;
   notes: string;
   createdAt: string;
+  status?: string;
+  updatedAt?: string;
 }

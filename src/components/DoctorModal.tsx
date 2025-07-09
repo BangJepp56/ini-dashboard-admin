@@ -43,7 +43,7 @@ const DoctorModal: React.FC<DoctorModalProps> = ({ doctor, onClose, onSave }) =>
     setError(null);
     
     try {
-      // Hanya kirim data yang diperlukan - HAPUS field poli yang bermasalah
+      // Hanya kirim data yang diperlukan
       const doctorData = {
         name: name.trim(),
         specialization: specialization.trim(),
@@ -56,6 +56,7 @@ const DoctorModal: React.FC<DoctorModalProps> = ({ doctor, onClose, onSave }) =>
       // Reset form jika berhasil
       setName('');
       setSpecialization('');
+      onClose();
       
     } catch (error) {
       console.error('Error saving doctor:', error);

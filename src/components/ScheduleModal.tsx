@@ -7,6 +7,7 @@ interface ScheduleModalProps {
   doctors: Doctor[];
   onClose: () => void;
   onSave: (schedule: Omit<Schedule, 'id'>) => void;
+  isOpen?: boolean;
 }
 
 const ScheduleModal: React.FC<ScheduleModalProps> = ({ schedule, doctors, onClose, onSave }) => {

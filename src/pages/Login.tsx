@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Heart, Mail, Lock, AlertCircle } from 'lucide-react';
+import {Mail, Lock, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import logoImage from '../assets/logo.png';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -34,7 +35,7 @@ const Login: React.FC = () => {
       {/* Header */}
       <div className="text-center mb-8">
         <div className="bg-emerald-500 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-        <Heart className="w-8 h-8 text-white" />
+        <img src={logoImage} alt="RSIA Prima Qonita Logo" className="w-16 h-16 rounded-full" />
         </div>
         <h1 className="text-2xl font-bold text-gray-800 mb-2">RSIA Prima Qonita</h1>
         <p className="text-gray-600">Admin Login</p>
@@ -62,7 +63,7 @@ const Login: React.FC = () => {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
-          placeholder="admin@primaconita.com"
+          placeholder="Masukkan email Anda"
           disabled={loading}
           />
         </div>

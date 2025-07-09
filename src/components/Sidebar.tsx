@@ -2,9 +2,9 @@
 
 import type React from "react"
 import { NavLink } from "react-router-dom"
-import { LayoutDashboard, Users, UserCheck, Calendar, LogOut, Heart } from "lucide-react" // Import CalendarCheck
+import { LayoutDashboard, Users, UserCheck, Calendar, LogOut, CalendarCheck } from "lucide-react"
 import { useAuth } from "../contexts/AuthContext"
-
+import logoImage from "../assets/logo.png"
 const Sidebar: React.FC = () => {
   const { logout } = useAuth()
 
@@ -21,6 +21,7 @@ const Sidebar: React.FC = () => {
     { path: "/patients", icon: Users, label: "Pasien" },
     { path: "/doctors", icon: UserCheck, label: "Dokter" },
     { path: "/schedules", icon: Calendar, label: "Jadwal Praktek" },
+    { path: "/follow-up", icon: CalendarCheck, label: "Jadwal Kontrol" },
   ]
 
   return (
@@ -32,16 +33,20 @@ const Sidebar: React.FC = () => {
         {/* Logo Section */}
         <div className="p-6 border-b border-white/20 flex-shrink-0">
           <div className="flex items-center space-x-3">
-            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-3 rounded-xl shadow-lg">
-              <Heart className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-                RSIA Prima Qonita
-              </h1>
-              <p className="text-sm text-gray-600">Admin Dashboard</p>
-            </div>
-          </div>
+  <div className="relative">
+    <img 
+      src={logoImage} 
+      alt="RSIA Prima Qonita Logo" 
+      className="w-12 h-12 rounded-xl shadow-lg object-cover"
+    />
+  </div>
+  <div>
+    <h1 className="text-lg font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+      RSIA Prima Qonita
+    </h1>
+    <p className="text-sm text-gray-600">Admin Dashboard</p>
+  </div>
+</div>
         </div>
 
         {/* Navigation */}

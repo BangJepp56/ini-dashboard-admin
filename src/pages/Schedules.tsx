@@ -367,17 +367,21 @@ const Schedules: React.FC = () => {
           lastUpdated: new Date().toISOString()
         });
         
-        const updatedSchedule = { ...selectedSchedule, ...scheduleData };
+        const updatedSchedule: Schedule = { 
+          ...selectedSchedule, 
+          ...scheduleData,
+          lastUpdated: new Date().toISOString()
+        };
         
         // Update doctor status
-        await updateDoctorStatus(scheduleData.doctorId || '', scheduleData.status);
+        await updateDoctorStatus(scheduleData.doctorId || '', scheduleData.status as 'active' | 'holiday' | 'inactive');
         
         // Create notification
         await createNotification('schedule_updated', updatedSchedule);
         
         setSchedules(schedules.map(schedule =>
           schedule.id === selectedSchedule.id
-            ? { ...schedule, ...scheduleData }
+            ? updatedSchedule
             : schedule
         ));
       } else {
@@ -396,7 +400,7 @@ const Schedules: React.FC = () => {
         };
         
         // Update doctor status
-        await updateDoctorStatus(scheduleData.doctorId || '', scheduleData.status);
+        await updateDoctorStatus(scheduleData.doctorId || '', scheduleData.status as 'active' | 'holiday' | 'inactive');
         
         // Create notification
         await createNotification('schedule_created', newSchedule);
@@ -416,7 +420,7 @@ const Schedules: React.FC = () => {
     if (!selectedSchedule) return;
 
     try {
-      const updatedSchedule = {
+      const updatedSchedule: Schedule = {
         ...selectedSchedule,
         status: 'holiday',
         holidayReason: holidayData.reason,
@@ -425,7 +429,13 @@ const Schedules: React.FC = () => {
         lastUpdated: new Date().toISOString()
       };
 
-      await updateDoc(doc(db, 'schedules', selectedSchedule.id), updatedSchedule);
+      await updateDoc(doc(db, 'schedules', selectedSchedule.id), {
+        status: 'holiday',
+        holidayReason: holidayData.reason,
+        holidayStartDate: holidayData.startDate,
+        holidayEndDate: holidayData.endDate,
+        lastUpdated: new Date().toISOString()
+      });
       
       // Update doctor status to holiday
       await updateDoctorStatus(selectedSchedule.doctorId || '', 'holiday');
@@ -743,7 +753,7 @@ const Schedules: React.FC = () => {
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex-1">
                     <h3 className="text-xl font-bold text-gray-800 mb-2">
-                      Dr. {schedule.doctorName}
+                      {schedule.doctorName}
                     </h3>
                     <div className="flex items-center space-x-2 mb-2">
                       <Stethoscope className="w-4 h-4 text-emerald-600" />
@@ -752,7 +762,7 @@ const Schedules: React.FC = () => {
                     <div className="flex items-center space-x-2 mb-3">
                       <Calendar className="w-4 h-4 text-gray-500" />
                       <span className="text-sm text-gray-600">
-                        {formatDays(schedule.days)} • {schedule.timeStart} - {schedule.timeEnd}
+                        {formatDays(schedule.days)} • {schedule.startTime} - {schedule.endTime}
                       </span>
                     </div>
                     {getStatusBadge(schedule.status)}
@@ -905,26 +915,24 @@ const Schedules: React.FC = () => {
       {/* Modals */}
       {showScheduleModal && (
         <ScheduleModal
-          isOpen={showScheduleModal}
+          schedule={selectedSchedule}
+          doctors={doctors}
           onClose={() => {
             setShowScheduleModal(false);
             setSelectedSchedule(null);
           }}
           onSave={handleSaveSchedule}
-          schedule={selectedSchedule}
-          doctors={doctors}
         />
       )}
 
       {showHolidayModal && (
         <HolidayModal
-          isOpen={showHolidayModal}
+          schedule={selectedSchedule!}
           onClose={() => {
             setShowHolidayModal(false);
             setSelectedSchedule(null);
           }}
           onSave={handleSaveHoliday}
-          schedule={selectedSchedule}
         />
       )}
     </div>

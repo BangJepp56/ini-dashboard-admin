@@ -27,7 +27,8 @@ const FollowUpModal: React.FC<FollowUpModalProps> = ({ patient, onClose }) => {
         appointmentDate,
         appointmentTime,
         notes,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        status: 'scheduled'
       };
 
       await addDoc(collection(db, 'followUpAppointments'), followUpData);
