@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Edit, Calendar, AlertCircle, Search, Trash2, ArrowUpRight, Clock, Stethoscope, Bell, X } from 'lucide-react';
 import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { Schedule, Doctor } from '../types';
+import { Schedule, Doctor, Shift } from '../types';
 import ScheduleModal from '../components/ScheduleModal';
 import HolidayModal from '../components/HolidayModal';
 
@@ -234,8 +234,33 @@ const Schedules: React.FC = () => {
         }
         return true;
       });
+
+      // Migration: Convert old schedules to new format
+      const migratedSchedules = validSchedules.map(schedule => {
+        if (!schedule.shifts && (schedule as any).startTime && (schedule as any).endTime) {
+          // Convert old format to new format
+          const migratedSchedule: Schedule = {
+            ...schedule,
+            shifts: [{
+              id: Date.now().toString(),
+              name: 'Praktek',
+              startTime: (schedule as any).startTime,
+              endTime: (schedule as any).endTime,
+              maxPatients: 20
+            }]
+          };
+          
+          // Update in Firebase
+          updateDoc(doc(db, 'schedules', schedule.id), {
+            shifts: migratedSchedule.shifts
+          }).catch(console.error);
+          
+          return migratedSchedule;
+        }
+        return schedule;
+      });
       
-      setSchedules(validSchedules);
+      setSchedules(migratedSchedules);
       setDoctors(doctorsData);
       setLoading(false);
     } catch (error) {
@@ -528,6 +553,19 @@ const Schedules: React.FC = () => {
       .join(', ');
   };
 
+  const formatShifts = (shifts: Shift[]) => {
+    if (!shifts || shifts.length === 0) return 'Tidak ada shift';
+    
+    return shifts
+      .sort((a, b) => a.startTime.localeCompare(b.startTime))
+      .map(shift => `${shift.name} (${shift.startTime} - ${shift.endTime})`)
+      .join(', ');
+  };
+
+  const getTotalShifts = (schedule: Schedule) => {
+    return schedule.shifts ? schedule.shifts.length : 0;
+  };
+
   const getRemainingHolidayDays = (schedule: Schedule) => {
     if (schedule.status !== 'holiday' || !schedule.holidayEndDate) return 0;
     
@@ -577,7 +615,7 @@ const Schedules: React.FC = () => {
               Jadwal Praktek Dokter
             </h1>
             <p className="text-lg text-gray-600 max-w-2xl mb-8 md:mb-0">
-              Kelola jadwal praktek dan libur dokter dengan mudah dan efisien
+              Kelola jadwal praktek dan libur dokter dengan sistem multi-shift
             </p>
           </div>
           <div className="flex items-center space-x-4">
@@ -734,11 +772,13 @@ const Schedules: React.FC = () => {
           <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-white/50 p-4 shadow-lg">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Tidak Aktif</p>
-                <p className="text-2xl font-bold text-gray-600">{schedules.filter(s => s.status === 'inactive').length}</p>
+                <p className="text-sm text-gray-600">Total Shift</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {schedules.reduce((total, schedule) => total + getTotalShifts(schedule), 0)}
+                </p>
               </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-gray-500 to-gray-600 rounded-xl flex items-center justify-center">
-                <X className="w-6 h-6 text-white" />
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center">
+                <Clock className="w-6 h-6 text-white" />
               </div>
             </div>
           </div>
@@ -762,10 +802,45 @@ const Schedules: React.FC = () => {
                     <div className="flex items-center space-x-2 mb-3">
                       <Calendar className="w-4 h-4 text-gray-500" />
                       <span className="text-sm text-gray-600">
-                        {formatDays(schedule.days)} • {schedule.startTime} - {schedule.endTime}
+                        {formatDays(schedule.days)}
                       </span>
                     </div>
                     {getStatusBadge(schedule.status)}
+                  </div>
+                </div>
+
+                {/* Shifts Display */}
+                <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Clock className="w-4 h-4 text-blue-600" />
+                    <span className="text-sm font-medium text-blue-800">
+                      Shift Praktek ({getTotalShifts(schedule)} shift)
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {schedule.shifts && schedule.shifts.length > 0 ? (
+                      schedule.shifts
+                        .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                        .map((shift, index) => (
+                          <div key={shift.id} className="flex items-center justify-between bg-white/70 rounded-lg p-2">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm font-medium text-blue-800">
+                                {shift.name}
+                              </span>
+                              <span className="text-xs text-blue-600">
+                                {shift.startTime} - {shift.endTime}
+                              </span>
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              Max {shift.maxPatients || 20} pasien
+                            </span>
+                          </div>
+                        ))
+                    ) : (
+                      <div className="text-sm text-gray-500 italic">
+                        Tidak ada shift terdefinisi
+                      </div>
+                    )}
                   </div>
                 </div>
 

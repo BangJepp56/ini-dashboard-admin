@@ -35,19 +35,26 @@ export interface Doctor {
   specialization: string;
 }
 
+export interface Shift {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  maxPatients?: number;
+}
+
 export interface Schedule {
   id: string;
-  doctorId: string;
+  doctorId?: string;
   doctorName: string;
   poly: string;
   days: string[];
-  startTime: string;
-  endTime: string;
-  status: string;
+  shifts: Shift[];
+  status: 'active' | 'holiday' | 'inactive';
   holidayReason?: string;
   holidayStartDate?: string;
   holidayEndDate?: string;
-  createdAt: string;
+  createdAt?: string;
   lastUpdated?: string;
 }
 

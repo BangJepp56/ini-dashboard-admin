@@ -115,7 +115,8 @@ const Doctors: React.FC = () => {
       
     } catch (error) {
       console.error('Error saving doctor:', error);
-      setError(`Gagal menyimpan data dokter: ${error.message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      setError(`Gagal menyimpan data dokter: ${message}`);
     }
   };
 

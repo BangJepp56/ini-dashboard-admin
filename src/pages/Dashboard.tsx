@@ -48,7 +48,11 @@ const Dashboard: React.FC = () => {
 
       // Recent patients (last 8)
       const sortedPatients = patients
-        .sort((a, b) => new Date(b.tanggal_daftar).getTime() - new Date(a.tanggal_daftar).getTime())
+        .sort((a, b) => {
+          const ta = a.tanggal_daftar ? new Date(a.tanggal_daftar).getTime() : 0;
+          const tb = b.tanggal_daftar ? new Date(b.tanggal_daftar).getTime() : 0;
+          return tb - ta;
+        })
         .slice(0, 8);
       setRecentPatients(sortedPatients);
 
