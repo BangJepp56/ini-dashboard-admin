@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Clock, Trash2, User, Stethoscope, Calendar, Save, AlertCircle } from 'lucide-react';
-import { Schedule, Doctor, Shift } from '../types';
+import { X, User, MapPin, Clock, Calendar } from 'lucide-react';
+import { Schedule, Doctor } from '../types';
 
 interface ScheduleModalProps {
   schedule: Schedule | null;
@@ -10,17 +10,24 @@ interface ScheduleModalProps {
 }
 
 const ScheduleModal: React.FC<ScheduleModalProps> = ({ schedule, doctors, onClose, onSave }) => {
-  const [formData, setFormData] = useState({
-    doctorId: '',
-    doctorName: '',
-    poly: '',
-    days: [] as string[],
-    shifts: [] as Shift[],
-    status: 'active' as 'active' | 'holiday' | 'inactive'
-  });
-
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [doctorId, setDoctorId] = useState('');
+  const [doctorName, setDoctorName] = useState('');
+  const [poly, setPoly] = useState('');
+  const [days, setDays] = useState<string[]>([]);
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [status, setStatus] = useState('active');
   const [loading, setLoading] = useState(false);
+
+  const dayOptions = [
+    { value: 'monday', label: 'Senin' },
+    { value: 'tuesday', label: 'Selasa' },
+    { value: 'wednesday', label: 'Rabu' },
+    { value: 'thursday', label: 'Kamis' },
+    { value: 'friday', label: 'Jumat' },
+    { value: 'saturday', label: 'Sabtu' },
+    { value: 'sunday', label: 'Minggu' }
+  ];
 
   const polyOptions = [
     'Kebidanan dan Kandungan',
@@ -34,475 +41,303 @@ const ScheduleModal: React.FC<ScheduleModalProps> = ({ schedule, doctors, onClos
     'Gigi',
   ];
 
-  const dayOptions = [
-    { value: 'monday', label: 'Senin' },
-    { value: 'tuesday', label: 'Selasa' },
-    { value: 'wednesday', label: 'Rabu' },
-    { value: 'thursday', label: 'Kamis' },
-    { value: 'friday', label: 'Jumat' },
-    { value: 'saturday', label: 'Sabtu' },
-    { value: 'sunday', label: 'Minggu' }
-  ];
+  // Reset form ketika modal dibuka/tutup
+  const resetForm = () => {
+    setDoctorId('');
+    setDoctorName('');
+    setPoly('');
+    setDays([]);
+    setStartTime('');
+    setEndTime('');
+    setStatus('active');
+  };
 
-  const shiftTemplates = [
-    { name: 'Pagi', startTime: '08:00', endTime: '12:00' },
-    { name: 'Siang', startTime: '13:00', endTime: '17:00' },
-    { name: 'Malam', startTime: '18:00', endTime: '22:00' }
-  ];
-
+  // Initialize form data
   useEffect(() => {
     if (schedule) {
-      setFormData({
-        doctorId: schedule.doctorId || '',
-        doctorName: schedule.doctorName,
-        poly: schedule.poly,
-        days: schedule.days,
-        shifts: schedule.shifts || [],
-        status: schedule.status
-      });
+      // Edit mode - populate with existing data
+      setDoctorId(schedule.doctorId || '');
+      setDoctorName(schedule.doctorName || '');
+      setPoly(schedule.poly || '');
+      setDays(schedule.days || []);
+      setStartTime(schedule.startTime || '');
+      setEndTime(schedule.endTime || '');
+      setStatus(schedule.status || 'active');
+    } else {
+      // Add mode - reset to defaults
+      resetForm();
     }
   }, [schedule]);
 
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.doctorId) {
-      newErrors.doctorId = 'Pilih dokter';
-    }
-
-    if (!formData.poly.trim()) {
-      newErrors.poly = 'Poli wajib diisi';
-    }
-
-    if (formData.days.length === 0) {
-      newErrors.days = 'Pilih minimal satu hari';
-    }
-
-    if (formData.shifts.length === 0) {
-      newErrors.shifts = 'Tambahkan minimal satu shift';
-    }
-
-    // Validate shifts
-    formData.shifts.forEach((shift, index) => {
-      if (!shift.name.trim()) {
-        newErrors[`shift_${index}_name`] = 'Nama shift wajib diisi';
-      }
-      if (!shift.startTime) {
-        newErrors[`shift_${index}_startTime`] = 'Jam mulai wajib diisi';
-      }
-      if (!shift.endTime) {
-        newErrors[`shift_${index}_endTime`] = 'Jam selesai wajib diisi';
-      }
-      if (shift.startTime && shift.endTime && shift.startTime >= shift.endTime) {
-        newErrors[`shift_${index}_time`] = 'Jam mulai harus lebih awal dari jam selesai';
-      }
-    });
-
-    // Check for overlapping shifts
-    for (let i = 0; i < formData.shifts.length; i++) {
-      for (let j = i + 1; j < formData.shifts.length; j++) {
-        const shift1 = formData.shifts[i];
-        const shift2 = formData.shifts[j];
-        
-        if (shift1.startTime < shift2.endTime && shift2.startTime < shift1.endTime) {
-          newErrors[`shift_overlap`] = 'Waktu shift tidak boleh bertumpang tindih';
-          break;
+  // Update doctor info when doctor selection changes
+  const handleDoctorChange = (selectedDoctorId: string) => {
+    setDoctorId(selectedDoctorId);
+    
+    if (selectedDoctorId) {
+      const selectedDoctor = doctors.find(doc => doc.id === selectedDoctorId);
+      if (selectedDoctor) {
+        setDoctorName(selectedDoctor.name);
+        // Auto-fill poly only if it's empty or in add mode
+        if (!schedule || !poly) {
+          setPoly(selectedDoctor.specialization);
         }
       }
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleDoctorChange = (doctorId: string) => {
-    const selectedDoctor = doctors.find(d => d.id === doctorId);
-    if (selectedDoctor) {
-      setFormData(prev => ({
-        ...prev,
-        doctorId,
-        doctorName: selectedDoctor.name,
-        poly: selectedDoctor.poly || selectedDoctor.specialization || ''
-      }));
+    } else {
+      // Clear related fields when no doctor selected
+      setDoctorName('');
+      if (!schedule) { // Only clear poly in add mode
+        setPoly('');
+      }
     }
   };
 
-  const handleDayToggle = (day: string) => {
-    setFormData(prev => ({
-      ...prev,
-      days: prev.days.includes(day)
-        ? prev.days.filter(d => d !== day)
-        : [...prev.days, day]
-    }));
+  const handleDayChange = (day: string) => {
+    setDays(prev => 
+      prev.includes(day) 
+        ? prev.filter(d => d !== day)
+        : [...prev, day]
+    );
   };
 
-  const addShift = (template?: { name: string; startTime: string; endTime: string }) => {
-    const newShift: Shift = {
-      id: Date.now().toString(),
-      name: template?.name || '',
-      startTime: template?.startTime || '08:00',
-      endTime: template?.endTime || '17:00',
-      maxPatients: 20
-    };
+  const validateForm = () => {
+    const errors = [];
+    
+    if (!doctorId) errors.push('Dokter harus dipilih');
+    if (!poly) errors.push('Poli harus dipilih');
+    if (days.length === 0) errors.push('Minimal pilih 1 hari praktek');
+    if (!startTime) errors.push('Jam mulai harus diisi');
+    if (!endTime) errors.push('Jam selesai harus diisi');
+    if (startTime && endTime && startTime >= endTime) {
+      errors.push('Jam selesai harus lebih besar dari jam mulai');
+    }
 
-    setFormData(prev => ({
-      ...prev,
-      shifts: [...prev.shifts, newShift]
-    }));
-  };
-
-  const updateShift = (index: number, field: keyof Shift, value: string | number) => {
-    setFormData(prev => ({
-      ...prev,
-      shifts: prev.shifts.map((shift, i) => 
-        i === index ? { ...shift, [field]: value } : shift
-      )
-    }));
-  };
-
-  const removeShift = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      shifts: prev.shifts.filter((_, i) => i !== index)
-    }));
+    return errors;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) return;
+    const validationErrors = validateForm();
+    if (validationErrors.length > 0) {
+      alert(validationErrors.join('\n'));
+      return;
+    }
 
     setLoading(true);
     try {
-      await onSave(formData);
+      const scheduleData = {
+        doctorId,
+        doctorName,
+        poly,
+        days,
+        startTime,
+        endTime,
+        status,
+        holidayReason: schedule?.holidayReason || '',
+        holidayStartDate: schedule?.holidayStartDate || '',
+        holidayEndDate: schedule?.holidayEndDate || '',
+        createdAt: schedule?.createdAt || new Date().toISOString()
+      };
+
+      await onSave(scheduleData);
+      onClose(); // Close modal after successful save
     } catch (error) {
       console.error('Error saving schedule:', error);
+      alert('Gagal menyimpan jadwal. Silakan coba lagi.');
     } finally {
       setLoading(false);
     }
   };
 
-  const sortedShifts = [...formData.shifts].sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const handleClose = () => {
+    if (!loading) {
+      onClose();
+    }
+  };
+
+  // Get available doctors (could filter based on status if needed)
+  const availableDoctors = doctors.filter(doctor => doctor.id && doctor.name);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-blue-50">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center">
-              <Calendar className="w-5 h-5 text-white" />
-            </div>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-semibold text-gray-800">
+            {schedule ? 'Edit Jadwal Praktek' : 'Tambah Jadwal Praktek'}
+          </h2>
+          <button
+            onClick={handleClose}
+            className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors"
+            disabled={loading}
+            type="button"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <h2 className="text-2xl font-bold text-gray-800">
-                {schedule ? 'Edit Jadwal Praktek' : 'Tambah Jadwal Praktek'}
-              </h2>
-              <p className="text-sm text-gray-600">
-                Kelola jadwal praktek dokter dengan multiple shift
-              </p>
+              <label htmlFor="doctor" className="block text-sm font-medium text-gray-700 mb-2">
+                <User className="w-4 h-4 inline mr-1" />
+                Dokter *
+              </label>
+              <select
+                id="doctor"
+                value={doctorId}
+                onChange={(e) => handleDoctorChange(e.target.value)}
+                required
+                disabled={loading}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              >
+                <option value="">Pilih Dokter</option>
+                {availableDoctors.map((doctor) => (
+                  <option key={doctor.id} value={doctor.id}>
+                    {doctor.name} - {doctor.specialization}
+                  </option>
+                ))}
+              </select>
+              {doctorName && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Dokter terpilih: {doctorName}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="poly" className="block text-sm font-medium text-gray-700 mb-2">
+                <MapPin className="w-4 h-4 inline mr-1" />
+                Poli *
+              </label>
+              <select
+                id="poly"
+                value={poly}
+                onChange={(e) => setPoly(e.target.value)}
+                required
+                disabled={loading}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              >
+                <option value="">Pilih Poli</option>
+                {polyOptions.map((option) => (
+                  <option key={option} value={option}>
+                    Poli {option}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-xl transition-colors duration-200"
-          >
-            <X className="w-6 h-6 text-gray-600" />
-          </button>
-        </div>
 
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-          <form onSubmit={handleSubmit} className="space-y-8">
-            {/* Doctor Selection */}
-            <div className="bg-gray-50 rounded-xl p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <User className="w-5 h-5 text-emerald-600" />
-                <h3 className="text-lg font-semibold text-gray-800">Informasi Dokter</h3>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Dokter *
-                  </label>
-                  <select
-                    value={formData.doctorId}
-                    onChange={(e) => handleDoctorChange(e.target.value)}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white transition-all duration-300 ${
-                      errors.doctorId ? 'border-red-500' : 'border-gray-200'
-                    }`}
-                  >
-                    <option value="">Pilih Dokter</option>
-                    {doctors.map(doctor => (
-                      <option key={doctor.id} value={doctor.id}>
-                        {doctor.name} - {doctor.specialization}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.doctorId && (
-                    <p className="mt-1 text-sm text-red-600">{errors.doctorId}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <div className="flex items-center space-x-2">
-                      <Stethoscope className="w-4 h-4 text-emerald-600" />
-                      <span>Poli Layanan *</span>
-                    </div>
-                  </label>
-                  <select
-                    value={formData.poly}
-                    onChange={(e) => setFormData(prev => ({ ...prev, poly: e.target.value }))}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white transition-all duration-300 ${
-                      errors.poly ? 'border-red-500' : 'border-gray-200'
-                    }`}
-                  >
-                    <option value="">Pilih Poli Layanan</option>
-                    {polyOptions.map(poly => (
-                      <option key={poly} value={poly}>
-                        {poly}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.poly && (
-                    <p className="mt-1 text-sm text-red-600">{errors.poly}</p>
-                  )}
-                </div>
-              </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              <Calendar className="w-4 h-4 inline mr-1" />
+              Hari Praktek *
+            </label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {dayOptions.map((day) => (
+                <label 
+                  key={day.value} 
+                  className={`flex items-center space-x-2 p-2 border rounded-lg cursor-pointer transition-colors ${
+                    days.includes(day.value) 
+                      ? 'bg-emerald-50 border-emerald-300' 
+                      : 'hover:bg-gray-50 border-gray-300'
+                  } ${loading ? 'cursor-not-allowed opacity-50' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={days.includes(day.value)}
+                    onChange={() => handleDayChange(day.value)}
+                    disabled={loading}
+                    className="text-emerald-500 focus:ring-emerald-500 rounded"
+                  />
+                  <span className="text-sm font-medium">{day.label}</span>
+                </label>
+              ))}
             </div>
-
-            {/* Days Selection */}
-            <div className="bg-gray-50 rounded-xl p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <Calendar className="w-5 h-5 text-emerald-600" />
-                <h3 className="text-lg font-semibold text-gray-800">Hari Praktek</h3>
-              </div>
-              
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                {dayOptions.map(day => (
-                  <button
-                    key={day.value}
-                    type="button"
-                    onClick={() => handleDayToggle(day.value)}
-                    className={`p-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                      formData.days.includes(day.value)
-                        ? 'bg-emerald-600 text-white shadow-lg'
-                        : 'bg-white text-gray-700 border border-gray-200 hover:border-emerald-300'
-                    }`}
-                  >
-                    {day.label}
-                  </button>
-                ))}
-              </div>
-              {errors.days && (
-                <p className="mt-2 text-sm text-red-600">{errors.days}</p>
-              )}
-            </div>
-
-            {/* Shifts Management */}
-            <div className="bg-gray-50 rounded-xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <Clock className="w-5 h-5 text-emerald-600" />
-                  <h3 className="text-lg font-semibold text-gray-800">Shift Praktek</h3>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="relative">
-                    <select
-                      onChange={(e) => {
-                        const selectedTemplate = shiftTemplates.find(t => t.name === e.target.value);
-                        if (selectedTemplate) {
-                          addShift(selectedTemplate);
-                          e.target.value = '';
-                        }
-                      }}
-                      className="px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white text-sm"
-                    >
-                      <option value="">Template Shift</option>
-                      {shiftTemplates.map(template => (
-                        <option key={template.name} value={template.name}>
-                          {template.name} ({template.startTime} - {template.endTime})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => addShift()}
-                    className="flex items-center space-x-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors duration-200 text-sm font-medium"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Tambah Shift</span>
-                  </button>
-                </div>
-              </div>
-
-              {errors.shifts && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
-                  <div className="flex items-center space-x-2">
-                    <AlertCircle className="w-4 h-4 text-red-600" />
-                    <p className="text-sm text-red-600">{errors.shifts}</p>
-                  </div>
-                </div>
-              )}
-
-              {errors.shift_overlap && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
-                  <div className="flex items-center space-x-2">
-                    <AlertCircle className="w-4 h-4 text-red-600" />
-                    <p className="text-sm text-red-600">{errors.shift_overlap}</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-4">
-                {sortedShifts.map((shift, index) => {
-                  const originalIndex = formData.shifts.findIndex(s => s.id === shift.id);
-                  return (
-                    <div key={shift.id} className="bg-white rounded-xl p-4 border border-gray-200">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="font-medium text-gray-800">Shift {index + 1}</h4>
-                        <button
-                          type="button"
-                          onClick={() => removeShift(originalIndex)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Nama Shift *
-                          </label>
-                          <input
-                            type="text"
-                            value={shift.name}
-                            onChange={(e) => updateShift(originalIndex, 'name', e.target.value)}
-                            placeholder="Contoh: Pagi"
-                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm ${
-                              errors[`shift_${originalIndex}_name`] ? 'border-red-500' : 'border-gray-200'
-                            }`}
-                          />
-                          {errors[`shift_${originalIndex}_name`] && (
-                            <p className="mt-1 text-xs text-red-600">{errors[`shift_${originalIndex}_name`]}</p>
-                          )}
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Jam Mulai *
-                          </label>
-                          <input
-                            type="time"
-                            value={shift.startTime}
-                            onChange={(e) => updateShift(originalIndex, 'startTime', e.target.value)}
-                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm ${
-                              errors[`shift_${originalIndex}_startTime`] ? 'border-red-500' : 'border-gray-200'
-                            }`}
-                          />
-                          {errors[`shift_${originalIndex}_startTime`] && (
-                            <p className="mt-1 text-xs text-red-600">{errors[`shift_${originalIndex}_startTime`]}</p>
-                          )}
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Jam Selesai *
-                          </label>
-                          <input
-                            type="time"
-                            value={shift.endTime}
-                            onChange={(e) => updateShift(originalIndex, 'endTime', e.target.value)}
-                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm ${
-                              errors[`shift_${originalIndex}_endTime`] ? 'border-red-500' : 'border-gray-200'
-                            }`}
-                          />
-                          {errors[`shift_${originalIndex}_endTime`] && (
-                            <p className="mt-1 text-xs text-red-600">{errors[`shift_${originalIndex}_endTime`]}</p>
-                          )}
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Maks Pasien
-                          </label>
-                          <input
-                            type="number"
-                            value={shift.maxPatients || 20}
-                            onChange={(e) => updateShift(originalIndex, 'maxPatients', parseInt(e.target.value))}
-                            min="1"
-                            max="100"
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                          />
-                        </div>
-                      </div>
-
-                      {errors[`shift_${originalIndex}_time`] && (
-                        <p className="mt-2 text-xs text-red-600">{errors[`shift_${originalIndex}_time`]}</p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {formData.shifts.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <Clock className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                  <p>Belum ada shift yang ditambahkan</p>
-                  <p className="text-sm">Klik "Tambah Shift" untuk memulai</p>
-                </div>
-              )}
-            </div>
-
-            {/* Status */}
-            <div className="bg-gray-50 rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Status</h3>
-              <div className="flex space-x-4">
-                {[
-                  { value: 'active', label: 'Aktif', color: 'bg-green-100 text-green-800 border-green-200' },
-                  { value: 'inactive', label: 'Tidak Aktif', color: 'bg-gray-100 text-gray-800 border-gray-200' }
-                ].map(status => (
-                  <button
-                    key={status.value}
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, status: status.value as any }))}
-                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border ${
-                      formData.status === status.value
-                        ? status.color
-                        : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    {status.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </form>
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end space-x-4 p-6 border-t border-gray-200 bg-gray-50">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-100 transition-colors duration-200 font-medium"
-          >
-            Batal
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="flex items-center space-x-2 px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-            ) : (
-              <Save className="w-4 h-4" />
+            {days.length > 0 && (
+              <p className="text-xs text-gray-500 mt-2">
+                Hari terpilih: {days.map(day => dayOptions.find(d => d.value === day)?.label).join(', ')}
+              </p>
             )}
-            <span>{loading ? 'Menyimpan...' : 'Simpan Jadwal'}</span>
-          </button>
-        </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="startTime" className="block text-sm font-medium text-gray-700 mb-2">
+                <Clock className="w-4 h-4 inline mr-1" />
+                Jam Mulai *
+              </label>
+              <input
+                type="time"
+                id="startTime"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                required
+                disabled={loading}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 mb-2">
+                <Clock className="w-4 h-4 inline mr-1" />
+                Jam Selesai *
+              </label>
+              <input
+                type="time"
+                id="endTime"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                required
+                disabled={loading}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
+              Status Jadwal
+            </label>
+            <select
+              id="status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              disabled={loading}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <option value="active">Aktif</option>
+              <option value="inactive">Tidak Aktif</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Status jadwal ini (bukan status dokter)
+            </p>
+          </div>
+
+          <div className="flex space-x-3 pt-4 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={handleClose}
+              disabled={loading}
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            >
+              {loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Menyimpan...
+                </>
+              ) : (
+                schedule ? 'Simpan Perubahan' : 'Tambah Jadwal'
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

@@ -254,14 +254,7 @@ const Doctors: React.FC = () => {
                         </div>
                       </div>
                       
-                      <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg p-4 border border-gray-100">
-                        <p className="text-sm text-gray-600">
-                          <span className="font-medium">ID Dokter:</span>
-                        </p>
-                        <p className="font-mono text-gray-800 text-sm mt-1 bg-white px-2 py-1 rounded border">
-                          {doctor.id}
-                        </p>
-                      </div>
+                      
                     </div>
                   </div>
                 ))}

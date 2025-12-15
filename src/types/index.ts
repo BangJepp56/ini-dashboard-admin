@@ -30,6 +30,7 @@ export interface PatientRegistration {
 }
 
 export interface Doctor {
+  poly: string;
   id: string;
   name: string;
   specialization: string;
