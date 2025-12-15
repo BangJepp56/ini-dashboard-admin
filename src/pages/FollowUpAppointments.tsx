@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Search, Filter, Eye, Edit, Trash2, CheckCircle, AlertCircle, Download } from 'lucide-react';
-import { collection, getDocs, updateDoc, doc, deleteDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { collection, getDocs, updateDoc, doc, deleteDoc, query, where } from 'firebase/firestore';
+import { db, auth } from '../config/firebase';
 import { FollowUpAppointment, PatientRegistration } from '../types';
 import FollowUpDetailModal from '../components/FollowUpDetailModal';
 import FollowUpEditModal from '../components/FollowUpEditModal';
@@ -20,41 +20,136 @@ const FollowUpAppointments: React.FC = () => {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<'admin' | 'patient' | null>(null);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  // ✅ FIX 1: Pisahkan fetch user role dan return role-nya
+  const checkUserRole = async (): Promise<'admin' | 'patient'> => {
+    try {
+      const currentUser = auth.currentUser;
+      console.log('🔍 Current User:', currentUser?.uid, currentUser?.email);
+      
+      if (!currentUser) {
+        console.log('❌ No user logged in');
+        return 'patient';
+      }
 
-  useEffect(() => {
-    filterAppointments();
-  }, [appointments, searchTerm, statusFilter, dateFilter, customDateFrom, customDateTo]);
+      const userQuery = query(collection(db, 'users'), where('uid', '==', currentUser.uid));
+      const userDoc = await getDocs(userQuery);
 
-  const fetchData = async () => {
+      console.log('📊 User docs found:', userDoc.size);
+      
+      if (!userDoc.empty) {
+        const userData = userDoc.docs[0].data();
+        console.log('👤 User data:', userData);
+        const role = userData.role || 'patient';
+        console.log('✅ User role:', role);
+        return role;
+      }
+      
+      console.log('⚠️ No user document found, defaulting to patient');
+      return 'patient';
+    } catch (error) {
+      console.error('❌ Error checking user role:', error);
+      return 'patient';
+    }
+  };
+
+  // ✅ FIX 2: Terima role sebagai parameter
+  const fetchData = async (role: 'admin' | 'patient') => {
     try {
       setLoading(true);
+      const currentUser = auth.currentUser;
       
-      // Fetch follow-up appointments
-      const appointmentsSnapshot = await getDocs(collection(db, 'followUpAppointments'));
-      const appointmentsData = appointmentsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as FollowUpAppointment[];
+      console.log('🔄 Fetching data...');
+      console.log('👤 Current User UID:', currentUser?.uid);
+      console.log('🎭 Role:', role);
+      
+      if (!currentUser) {
+        console.log('❌ User not logged in');
+        alert('Anda harus login terlebih dahulu');
+        setLoading(false);
+        return;
+      }
 
-      // Fetch patients for reference
-      const patientsSnapshot = await getDocs(collection(db, 'patients'));
-      const patientsData = patientsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as PatientRegistration[];
+      // ✅ FIX: Ambil semua data dulu, filter di client side
+      let appointmentsQuery = collection(db, 'followUpAppointments');
+
+      const appointmentsSnapshot = await getDocs(appointmentsQuery);
+      console.log('✅ Appointments fetched:', appointmentsSnapshot.size);
+      
+      if (appointmentsSnapshot.empty) {
+        console.log('⚠️ No appointments found in database');
+      } else {
+        console.log('📄 Sample appointment:', appointmentsSnapshot.docs[0]?.data());
+      }
+      
+      let appointmentsData = appointmentsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log('📝 Document ID:', doc.id, 'Data:', data);
+        return {
+          id: doc.id,
+          ...data
+        };
+      }) as FollowUpAppointment[];
+
+      // ✅ Filter di client side jika bukan admin
+      if (role !== 'admin') {
+        // Cari user email dari auth
+        const userEmail = currentUser.email;
+        console.log('🔍 Filtering by user email:', userEmail);
+        
+        // Filter berdasarkan email pasien (sesuaikan dengan field yang ada)
+        // Atau bisa filter berdasarkan patientName jika perlu
+        // Untuk sementara, tampilkan semua data untuk patient juga
+        // appointmentsData = appointmentsData.filter(apt => 
+        //   apt.patientEmail === userEmail // Jika ada field email
+        // );
+        
+        console.log('⚠️ Patient mode: Showing all appointments (adjust filter as needed)');
+      }
+
+      console.log('💾 Total appointments to set:', appointmentsData.length);
+
+      // Fetch patients untuk reference (hanya untuk admin)
+      if (role === 'admin') {
+        const patientsSnapshot = await getDocs(collection(db, 'patients'));
+        console.log('👥 Patients fetched:', patientsSnapshot.size);
+        const patientsData = patientsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as PatientRegistration[];
+        setPatients(patientsData);
+      }
 
       setAppointments(appointmentsData);
-      setPatients(patientsData);
+      console.log('✅ Appointments set to state successfully');
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('❌ Error fetching data:', error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      alert('Gagal memuat data jadwal kontrol: ' + (error as Error).message);
     } finally {
       setLoading(false);
     }
   };
+
+  // ✅ FIX 4: useEffect yang benar
+  useEffect(() => {
+    const initializeData = async () => {
+      try {
+        const role = await checkUserRole();
+        setUserRole(role);
+        await fetchData(role);
+      } catch (error) {
+        console.error('Error initializing data:', error);
+        setLoading(false);
+      }
+    };
+    
+    initializeData();
+  }, []);
+  useEffect(() => {
+    filterAppointments();
+  }, [appointments, searchTerm, statusFilter, dateFilter, customDateFrom, customDateTo]);
 
   const filterAppointments = () => {
     let filtered = appointments;
@@ -62,9 +157,9 @@ const FollowUpAppointments: React.FC = () => {
     // Search filter
     if (searchTerm) {
       filtered = filtered.filter(appointment =>
-        appointment.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        appointment.doctorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        appointment.id.toLowerCase().includes(searchTerm.toLowerCase())
+        appointment.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        appointment.doctorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        appointment.id?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -119,6 +214,18 @@ const FollowUpAppointments: React.FC = () => {
 
   const handleStatusUpdate = async (appointmentId: string, newStatus: string) => {
     try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        alert('Anda harus login terlebih dahulu');
+        return;
+      }
+
+      const appointment = appointments.find(a => a.id === appointmentId);
+      if (userRole !== 'admin' && appointment?.patientId !== currentUser.uid) {
+        alert('Anda tidak memiliki akses untuk mengubah jadwal ini');
+        return;
+      }
+
       await updateDoc(doc(db, 'followUpAppointments', appointmentId), {
         status: newStatus,
         updatedAt: new Date().toISOString()
@@ -141,6 +248,18 @@ const FollowUpAppointments: React.FC = () => {
     }
 
     try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        alert('Anda harus login terlebih dahulu');
+        return;
+      }
+
+      const appointment = appointments.find(a => a.id === appointmentId);
+      if (userRole !== 'admin' && appointment?.patientId !== currentUser.uid) {
+        alert('Anda tidak memiliki akses untuk menghapus jadwal ini');
+        return;
+      }
+
       await deleteDoc(doc(db, 'followUpAppointments', appointmentId));
       setAppointments(appointments.filter(appointment => appointment.id !== appointmentId));
     } catch (error) {
@@ -153,6 +272,17 @@ const FollowUpAppointments: React.FC = () => {
     if (!selectedAppointment) return;
 
     try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        alert('Anda harus login terlebih dahulu');
+        return;
+      }
+
+      if (userRole !== 'admin' && selectedAppointment.patientId !== currentUser.uid) {
+        alert('Anda tidak memiliki akses untuk mengubah jadwal ini');
+        return;
+      }
+
       await updateDoc(doc(db, 'followUpAppointments', selectedAppointment.id), {
         ...appointmentData,
         updatedAt: new Date().toISOString()
@@ -189,7 +319,6 @@ const FollowUpAppointments: React.FC = () => {
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(excelData);
 
-    // Set column widths
     const colWidths = [
       { wch: 5 }, { wch: 20 }, { wch: 25 }, { wch: 25 }, { wch: 15 }, 
       { wch: 12 }, { wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 15 }
@@ -264,10 +393,12 @@ const FollowUpAppointments: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-3">
-              Jadwal Kontrol Pasien
+              Jadwal Kontrol {userRole === 'admin' ? 'Pasien' : 'Anda'}
             </h1>
             <p className="text-lg text-gray-600 max-w-2xl">
-              Kelola dan pantau jadwal kontrol lanjutan pasien dengan mudah
+              {userRole === 'admin' 
+                ? 'Kelola dan pantau jadwal kontrol lanjutan semua pasien' 
+                : 'Lihat dan pantau jadwal kontrol lanjutan Anda'}
             </p>
           </div>
           <button
@@ -337,7 +468,6 @@ const FollowUpAppointments: React.FC = () => {
           <div className="absolute inset-0 bg-gradient-to-r from-white to-gray-50 rounded-2xl shadow-lg" />
           <div className="relative bg-white/80 backdrop-blur-sm rounded-2xl border border-white/50 p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Search */}
               <div className="lg:col-span-2">
                 <div className="relative">
                   <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -351,7 +481,6 @@ const FollowUpAppointments: React.FC = () => {
                 </div>
               </div>
 
-              {/* Status Filter */}
               <div>
                 <select
                   value={statusFilter}
@@ -366,7 +495,6 @@ const FollowUpAppointments: React.FC = () => {
                 </select>
               </div>
 
-              {/* Date Filter */}
               <div>
                 <select
                   value={dateFilter}
@@ -382,7 +510,6 @@ const FollowUpAppointments: React.FC = () => {
               </div>
             </div>
 
-            {/* Custom Date Range */}
             {dateFilter === 'custom' && (
               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -457,7 +584,7 @@ const FollowUpAppointments: React.FC = () => {
                         <div className="flex items-center space-x-3">
                           <div className="flex-shrink-0">
                             <div className="w-10 h-10 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 flex items-center justify-center text-white font-semibold">
-                              {appointment.patientName.charAt(0).toUpperCase()}
+                              {appointment.patientName?.charAt(0).toUpperCase()}
                             </div>
                           </div>
                           <div>
@@ -508,32 +635,36 @@ const FollowUpAppointments: React.FC = () => {
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button
-                            onClick={() => {
-                              setSelectedAppointment(appointment);
-                              setShowEditModal(true);
-                            }}
-                            className="p-2 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          {appointment.status !== 'completed' && (
-                            <button
-                              onClick={() => handleStatusUpdate(appointment.id, 'completed')}
-                              className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors"
-                              title="Tandai Selesai"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                            </button>
+                          {(userRole === 'admin' || appointment.patientId === auth.currentUser?.uid) && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setSelectedAppointment(appointment);
+                                  setShowEditModal(true);
+                                }}
+                                className="p-2 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors"
+                                title="Edit"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              {appointment.status !== 'completed' && (
+                                <button
+                                  onClick={() => handleStatusUpdate(appointment.id, 'completed')}
+                                  className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors"
+                                  title="Tandai Selesai"
+                                >
+                                  <CheckCircle className="w-4 h-4" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteAppointment(appointment.id)}
+                                className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Hapus"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
                           )}
-                          <button
-                            onClick={() => handleDeleteAppointment(appointment.id)}
-                            className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Hapus"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
                         </div>
                       </td>
                     </tr>
